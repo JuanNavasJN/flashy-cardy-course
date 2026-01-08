@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+description: Database interactions must always use the drizzle schema and queries
+---
+
+# Database Interaction Rules
+
+All database operations in this flash card application must use the Drizzle ORM schema and queries defined in [src/db/schema.ts](mdc:src/db/schema.ts).
+
+## Required Tables
+
+The application uses three main tables defined in the schema:- **decks**: User-created flash card decks ([src/db/schema.ts](mdc:src/db/schema.ts))
+
+- **cards**: Individual flash cards within decks ([src/db/schema.ts](mdc:src/db/schema.ts))
+- **user_progress**: Tracks learning progress for each card ([src/db/schema.ts](mdc:src/db/schema.ts))
+
+## Database Operations
+
+- Always use Drizzle's query builders and schema references
+- Never use raw SQL queries
+- Use proper TypeScript types from the schema
+- Follow Drizzle's migration patterns for schema changes
+- Ensure foreign key relationships are maintained

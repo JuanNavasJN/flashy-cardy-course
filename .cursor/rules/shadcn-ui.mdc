@@ -1,0 +1,22 @@
+---
+alwaysApply: true
+---
+
+# Shadcn UI Usage Guide
+
+This project uses `shadcn/ui` for all UI elements.
+
+- **Initialization**: If `shadcn/ui` is not initialized, use the following command:
+
+  ```bash
+  npx shadcn@latest init
+  ```
+
+- **Component Installation**: To install a specific component (e.g., a button), use the following command:
+  ```bash
+  npx shadcn@latest add <component-name>
+  ```
+  For example, to install the button component:
+  ```bash
+  npx shadcn@latest add button
+  ```

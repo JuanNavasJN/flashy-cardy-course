@@ -1,0 +1,165 @@
+---
+alwaysApply: true
+description: Data operations and server action validation rules
+---
+
+# Data Operations & Server Actions Rules
+
+All data operations in this flash card application follow strict patterns for security, type safety, and maintainability.
+
+## Data Retrieval
+
+**All data retrieval must be done via server components.** Never perform data fetching in client components.
+
+```typescript
+// ✅ Correct - Server component fetches data
+export default async function DeckPage({ params }: { params: { id: string } }) {
+  const { userId } = await auth();
+  const deck = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId))
+    .limit(1);
+
+  return <DeckComponent deck={deck} />;
+}
+
+// ❌ Wrong - Client component fetches data
+'use client';
+export function DeckComponent() {
+  const [deck, setDeck] = useState(null);
+  // Never fetch data here
+}
+```
+
+## Database Operations
+
+**All database updates, deletes, and inserts must be done using Zod validation.**
+
+### Server Actions with Zod
+
+```typescript
+'use server';
+
+import { z } from 'zod';
+
+// ✅ Correct - Define schema and TypeScript type
+const createDeckSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().max(500)
+});
+
+type CreateDeckInput = z.infer<typeof createDeckSchema>;
+
+export async function createDeckAction(input: CreateDeckInput) {
+  const { userId } = await auth();
+
+  // Validate input with Zod
+  const validatedData = createDeckSchema.parse(input);
+
+  // Perform database operation
+  await db.insert(decksTable).values({
+    userId,
+    ...validatedData
+  });
+}
+
+// ❌ Wrong - No Zod validation
+export async function createDeckAction(formData: FormData) {
+  const title = formData.get('title') as string;
+  // No validation - security risk!
+}
+```
+
+### Form Submission Pattern
+
+```typescript
+'use client';
+
+import { useTransition } from 'react';
+import { createDeckAction } from './actions';
+
+export function CreateDeckForm() {
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = (formData: FormData) => {
+    startTransition(async () => {
+      const input = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string
+      };
+      await createDeckAction(input);
+    });
+  };
+
+  return (
+    <form action={handleSubmit}>
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+
+## Server Action Requirements
+
+**All data passed to server actions must be validated by Zod and must have a TypeScript type.**
+
+### Required Pattern
+
+1. Define Zod schema for input validation
+2. Create TypeScript type from Zod schema using `z.infer<>`
+3. Server action accepts the typed input, not `FormData`
+4. Validate input with Zod before any database operations
+
+```typescript
+// ✅ Correct - Zod schema + TypeScript type
+const updateCardSchema = z.object({
+  id: z.string().uuid(),
+  front: z.string().min(1).max(500),
+  back: z.string().min(1).max(500)
+});
+
+type UpdateCardInput = z.infer<typeof updateCardSchema>;
+
+export async function updateCardAction(input: UpdateCardInput) {
+  const { userId } = await auth();
+
+  // Validate input
+  const validatedData = updateCardSchema.parse(input);
+
+  // Verify ownership through deck relationship
+  const card = await db
+    .select()
+    .from(cardsTable)
+    .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
+    .where(and(
+      eq(cardsTable.id, validatedData.id),
+      eq(decksTable.userId, userId)
+    ))
+    .limit(1);
+
+  if (!card.length) {
+    throw new Error('Card not found or access denied');
+  }
+
+  // Perform update
+  await db
+    .update(cardsTable)
+    .set(validatedData)
+    .where(eq(cardsTable.id, validatedData.id));
+}
+
+// ❌ Wrong - Using FormData as type
+export async function updateCardAction(formData: FormData) {
+  // Never do this - no type safety, no validation
+}
+```
+
+## Security Checklist
+
+- [ ] Data retrieval uses server components only
+- [ ] All database operations use Zod validation
+- [ ] Server actions accept typed inputs, not FormData
+- [ ] Input validation happens before any database operations
+- [ ] User ownership is verified for all data access
+- [ ] TypeScript types are derived from Zod schemas

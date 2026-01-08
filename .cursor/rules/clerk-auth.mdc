@@ -1,0 +1,123 @@
+---
+alwaysApply: true
+description: Clerk authentication and user data ownership rules
+---
+
+# Clerk Authentication & Data Ownership Rules
+
+All authentication in this flash card application is handled by Clerk. **Users must only be able to access their own data** - never data belonging to other users.
+
+## Authentication Setup
+
+- Authentication is configured in [app/layout.tsx](mdc:app/layout.tsx) using `ClerkProvider`
+- User authentication state is managed through Clerk components: `SignedIn`, `SignedOut`, `UserButton`
+- Clerk user IDs are stored in the database as `userId` fields
+
+## Data Ownership Structure
+
+Based on the schema in [src/db/schema.ts](mdc:src/db/schema.ts):
+
+- **Decks**: Directly owned by users via `userId` field
+- **Cards**: Owned indirectly through their parent deck (`deckId` references decks)
+- **User Progress**: Directly owned by users via `userId` field
+
+## Access Control Requirements
+
+### Always Include User Filtering
+
+**Every database query that accesses user data must include user ID filtering:**
+
+```typescript
+// ✅ Correct - Filter by userId for decks
+const userDecks = await db.select().from(decksTable).where(eq(decksTable.userId, userId));
+
+// ✅ Correct - Filter by userId for progress
+const userProgress = await db.select().from(userProgressTable).where(eq(userProgressTable.userId, userId));
+
+// ✅ Correct - Join through decks to ensure card ownership
+const userCards = await db
+  .select()
+  .from(cardsTable)
+  .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
+  .where(eq(decksTable.userId, userId));
+
+// ❌ Wrong - No user filtering (security vulnerability!)
+const allDecks = await db.select().from(decksTable);
+```
+
+### API Route Security
+
+- All API routes must verify user authentication using Clerk's `auth()` or `currentUser()`
+- Extract the `userId` from the authenticated user
+- Include user filtering in all database operations
+
+### Client-Side Security
+
+- Never trust client-side data for access control decisions
+- All data access must be validated server-side
+- Use Clerk's client-side hooks for UI state, not security decisions
+
+## Common Security Patterns
+
+### Getting Current User ID
+
+```typescript
+import { auth } from '@clerk/nextjs/server';
+
+// In API routes
+const { userId } = await auth();
+if (!userId) {
+  return new Response('Unauthorized', { status: 401 });
+}
+```
+
+### Database Queries with Ownership
+
+```typescript
+// Only fetch user's own decks
+const decks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+
+// Only fetch cards from user's own decks
+const cards = await db
+  .select()
+  .from(cardsTable)
+  .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
+  .where(eq(decksTable.userId, userId));
+
+// Only fetch user's own progress
+const progress = await db
+  .select()
+  .from(userProgressTable)
+  .where(eq(userProgressTable.userId, userId));
+```
+
+### Creating New Records
+
+```typescript
+// Always include userId when creating user-owned records
+await db.insert(decksTable).values({
+  userId, // Always required
+  title: 'My Deck',
+  description: 'Description'
+});
+```
+
+## Security Checklist
+
+- [ ] All database queries include appropriate user filtering
+- [ ] API routes check authentication before any data access
+- [ ] User ID is extracted from Clerk auth, not from request parameters
+- [ ] Cards are accessed through deck ownership verification
+- [ ] No raw SQL queries that could bypass ownership checks
+- [ ] Client-side components don't make direct database calls
+
+## Violation Examples
+
+**Never do this:**
+- Query all decks without user filtering
+- Accept userId from URL parameters or request body
+- Allow users to access cards without verifying deck ownership
+- Use client-side user ID for server-side database queries
