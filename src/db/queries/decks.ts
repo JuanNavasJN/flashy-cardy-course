@@ -37,21 +37,18 @@ export async function createDeck(
 
 export async function updateDeck(
   deckId: number,
-  userId: string,
   data: { title?: string; description?: string }
 ) {
   return await db
     .update(decksTable)
     .set(data)
     .where(eq(decksTable.id, deckId))
-    .where(eq(decksTable.userId, userId))
     .returning();
 }
 
-export async function deleteDeck(deckId: number, userId: string) {
+export async function deleteDeck(deckId: number) {
   return await db
     .delete(decksTable)
     .where(eq(decksTable.id, deckId))
-    .where(eq(decksTable.userId, userId))
     .returning();
 }

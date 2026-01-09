@@ -26,10 +26,7 @@ export async function getCardById(cardId: number, userId: string) {
     .select()
     .from(cardsTable)
     .innerJoin(decksTable, eq(cardsTable.deckId, decksTable.id))
-    .where(and(
-      eq(cardsTable.id, cardId),
-      eq(decksTable.userId, userId)
-    ))
+    .where(and(eq(cardsTable.id, cardId), eq(decksTable.userId, userId)))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
@@ -59,29 +56,18 @@ export async function createCard(
 
 export async function updateCard(
   cardId: number,
-  userId: string,
   data: { front?: string; back?: string }
 ) {
   return await db
     .update(cardsTable)
     .set(data)
     .where(eq(cardsTable.id, cardId))
-    .where(and(
-      eq(cardsTable.id, cardId),
-      eq(cardsTable.deckId, decksTable.id),
-      eq(decksTable.userId, userId)
-    ))
     .returning();
 }
 
-export async function deleteCard(cardId: number, userId: string) {
+export async function deleteCard(cardId: number) {
   return await db
     .delete(cardsTable)
     .where(eq(cardsTable.id, cardId))
-    .where(and(
-      eq(cardsTable.id, cardId),
-      eq(cardsTable.deckId, decksTable.id),
-      eq(decksTable.userId, userId)
-    ))
     .returning();
 }
