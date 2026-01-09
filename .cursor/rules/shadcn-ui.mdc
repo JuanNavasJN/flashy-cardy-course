@@ -4,7 +4,54 @@ alwaysApply: true
 
 # Shadcn UI Usage Guide
 
-This project uses `shadcn/ui` for all UI elements.
+## ABSOLUTE REQUIREMENT: ONLY shadcn/ui COMPONENTS ALLOWED
+
+**CRITICAL: This project must use ONLY shadcn/ui components for ALL UI elements. ABSOLUTELY NO custom UI components should be created in this project under any circumstances.**
+
+## UI Component Restrictions
+
+- ✅ **ALLOWED**: All UI must come from the official shadcn/ui library
+- ✅ **ALLOWED**: This project is in dark mode so make sure there are no dark colored text on dark backgrounds (and vice versa)
+- ❌ **FORBIDDEN**: Creating custom UI components, styled components, or any UI elements outside of shadcn/ui
+- ❌ **FORBIDDEN**: Using any other UI libraries or frameworks
+- ❌ **FORBIDDEN**: Building custom buttons, forms, dialogs, or other UI primitives
+
+## Clerk Authentication UI Requirements
+
+**All Clerk authentication UI must follow these exact requirements:**
+
+### Sign In/Sign Up Buttons
+
+- **MUST** use shadcn/ui `Button` components exclusively
+- **MUST NOT** use Clerk's default `<SignInButton>` or `<SignUpButton>` components
+- Create custom buttons using shadcn/ui `Button` that trigger Clerk authentication modals
+
+### Authentication Modals
+
+- **MUST** use Clerk's modal-based authentication (`<SignIn />` and `<SignUp />` components)
+- **MUST NOT** use Clerk's embedded forms or redirect-based authentication
+- Authentication flows should launch in modals, not redirect to separate pages
+
+### Implementation Pattern
+
+```tsx
+// ✅ CORRECT - Custom shadcn/ui button triggering Clerk modal
+import { Button } from "@/components/ui/button";
+import { SignIn } from "@clerk/nextjs";
+
+<Button onClick={() => setShowSignInModal(true)}>
+  Sign In
+</Button>
+
+// Modal implementation using shadcn/ui Dialog
+<Dialog open={showSignInModal} onOpenChange={setShowSignInModal}>
+  <DialogContent>
+    <SignIn />
+  </DialogContent>
+</Dialog>
+```
+
+## Setup Instructions
 
 - **Initialization**: If `shadcn/ui` is not initialized, use the following command:
 
@@ -20,3 +67,18 @@ This project uses `shadcn/ui` for all UI elements.
   ```bash
   npx shadcn@latest add button
   ```
+
+## Violation Examples
+
+**❌ NEVER DO THIS:**
+
+- Creating custom styled buttons or UI components
+- Using `<SignInButton>` or `<SignUpButton>` from Clerk
+- Building custom authentication forms
+- Using any UI library other than shadcn/ui
+
+**✅ ALWAYS DO THIS:**
+
+- Use only shadcn/ui components for all UI elements
+- Create authentication buttons using shadcn/ui `Button`
+- Use Clerk modals (`<SignIn />`, `<SignUp />`) for authentication flows

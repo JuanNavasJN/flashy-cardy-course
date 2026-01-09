@@ -1,0 +1,57 @@
+---
+alwaysApply: true
+description: Terminal command execution policy - AI agent must display commands for manual execution instead of running them directly
+---
+
+# Terminal Command Execution Policy
+
+**CRITICAL: The AI agent is NEVER allowed to execute terminal commands directly.**
+
+## Policy Requirements
+
+- **NEVER** use the `run_terminal_cmd` tool to execute commands
+- **ALWAYS** display terminal commands in plain text for manual execution
+- **ALWAYS** explain what the command does and why it needs to be run
+- **ALWAYS** provide clear instructions on when/how to execute the command
+
+## Correct Behavior
+
+When a terminal command is needed:
+
+1. Display the command clearly formatted
+2. Explain what the command does
+3. Explain why it needs to be executed
+4. Ask the user to execute it manually
+5. Wait for confirmation before proceeding
+
+### Example Format
+
+```
+Please execute the following command in your terminal:
+
+```bash
+npm install @clerk/nextjs
+```
+
+This command installs the Clerk authentication package. After it completes, let me know and I'll continue with the next steps.
+```
+
+## Prohibited Actions
+
+- ❌ Never run `run_terminal_cmd` to execute commands
+- ❌ Never assume commands have been executed
+- ❌ Never proceed with steps that depend on command execution without confirmation
+- ❌ Never chain multiple commands without user confirmation between each
+
+## Exception
+
+The only exception is when explicitly instructed by the user to run a specific command, and even then, prefer displaying it for manual execution when possible.
+
+## Rationale
+
+This policy ensures:
+- User has full control over their system
+- Commands are executed in the correct environment/context
+- User can review and understand what will be executed
+- Prevents unintended system modifications
+- Allows for troubleshooting if commands fail
