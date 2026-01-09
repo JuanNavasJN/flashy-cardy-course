@@ -1,15 +1,11 @@
-import { SignInButton, SignUpButton } from '@clerk/nextjs';
+'use client';
+
+import { SignedOut } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
 
-import { redirect } from 'next/navigation';
-import { currentUser } from '@clerk/nextjs/server';
-
-export default async function Home() {
-  const user = await currentUser();
-  if (user) {
-    redirect('/dashboard');
-  }
-
+// Client component to handle authentication state and redirects
+function AuthContent() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center space-y-8">
@@ -29,5 +25,13 @@ export default async function Home() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <SignedOut>
+      <AuthContent />
+    </SignedOut>
   );
 }
