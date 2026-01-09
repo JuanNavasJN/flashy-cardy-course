@@ -21,3 +21,61 @@ The application uses three main tables defined in the schema:- **decks**: User-c
 - Use proper TypeScript types from the schema
 - Follow Drizzle's migration patterns for schema changes
 - Ensure foreign key relationships are maintained
+
+## Query Organization
+
+**All data fetching and mutations must be done via helper functions / queries within the `src/db/queries` directory.**
+
+### Required Structure
+
+- Create query files in `src/db/queries/` for each domain (e.g., `decks.ts`, `cards.ts`, `userProgress.ts`)
+- Each query file must export named functions for all database operations
+- Functions must include proper user ownership filtering for security
+- Functions must accept typed parameters and return typed results
+
+### Implementation Pattern
+
+```typescript
+// src/db/queries/decks.ts
+import { db } from '../index';
+import { decksTable } from '../schema';
+import { eq } from 'drizzle-orm';
+
+export async function getUserDecks(userId: string) {
+  return await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId));
+}
+
+export async function createDeck(
+  userId: string,
+  data: { title: string; description?: string }
+) {
+  return await db
+    .insert(decksTable)
+    .values({ userId, ...data })
+    .returning();
+}
+```
+
+### Usage in Components
+
+```typescript
+// ✅ Correct - Use query functions
+import { getUserDecks } from '@/src/db/queries/decks';
+
+export default async function DecksPage() {
+  const { userId } = await auth();
+  const decks = await getUserDecks(userId);
+  // ...
+}
+
+// ❌ Wrong - Direct database queries in components
+export default async function DecksPage() {
+  const decks = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId));
+}
+```
