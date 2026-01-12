@@ -9,6 +9,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { getUserDecks } from '@/src/db/queries/decks';
+import { CreateDeckDialog } from './create-deck-dialog';
 
 export default async function Dashboard() {
   const { userId } = await auth();
@@ -31,7 +32,10 @@ export default async function Dashboard() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold">Your Decks</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold">Your Decks</h2>
+            <CreateDeckDialog />
+          </div>
 
           {decks.length === 0 ? (
             <div className="text-center py-8">

@@ -9,9 +9,20 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Edit } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import { AddCardForm } from './add-card-form';
 import { EditDeckForm } from './edit-deck-form';
+import { EditCardForm } from './edit-card-form';
+import { deleteCardAction } from '@/src/actions/cards';
+import { deleteDeckAction } from '@/src/actions/decks';
 
 interface Deck {
   id: number;
@@ -26,6 +37,7 @@ interface Card {
   front: string;
   back: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface DeckPageClientProps {
@@ -41,12 +53,48 @@ export function DeckPageClient({
 }: DeckPageClientProps) {
   const [isAddCardModalOpen, setIsAddCardModalOpen] = useState(false);
   const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [deletingCard, setDeletingCard] = useState<Card | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleteDeckDialogOpen, setIsDeleteDeckDialogOpen] = useState(false);
 
   const showSuccessMessage = (message: string) => {
     setSuccessMessage(message);
     // Auto-hide after 3 seconds
     setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleDeleteCard = async () => {
+    if (!deletingCard) return;
+
+    try {
+      await deleteCardAction({ id: deletingCard.id });
+      showSuccessMessage('Card deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setDeletingCard(null);
+    } catch (error) {
+      console.error('Error deleting card:', error);
+      // You might want to show an error message here
+    }
+  };
+
+  const handleDeleteDeck = async () => {
+    try {
+      await deleteDeckAction({ deckId: deckIdNum });
+      showSuccessMessage('Deck deleted successfully');
+      setIsDeleteDeckDialogOpen(false);
+      // Redirect to dashboard after successful deletion
+      window.location.href = '/dashboard';
+    } catch (error) {
+      console.error('Error deleting deck:', error);
+      // You might want to show an error message here
+    }
+  };
+
+  const openDeleteDialog = (card: Card) => {
+    setDeletingCard(card);
+    setIsDeleteDialogOpen(true);
   };
 
   return (
@@ -90,6 +138,20 @@ export function DeckPageClient({
               <Edit className="w-4 h-4 mr-2" />
               Edit
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDeleteDeckDialogOpen(true)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+            {cards.length > 0 && (
+              <Button size="sm" asChild>
+                <a href={`/decks/${deckIdNum}/study`}>Study Cards</a>
+              </Button>
+            )}
           </div>
           {deck.description && (
             <p className="text-muted-foreground">{deck.description}</p>
@@ -142,16 +204,34 @@ export function DeckPageClient({
                   key={card.id}
                   className="hover:shadow-md transition-shadow"
                 >
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-lg">{card.front}</CardTitle>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingCard(card)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteDialog(card)}
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <CardDescription className="text-base">
                       {card.back}
                     </CardDescription>
                     <div className="mt-4 text-xs text-muted-foreground">
-                      Added{' '}
-                      {new Date(card.createdAt).toLocaleDateString('en-US', {
+                      Updated{' '}
+                      {new Date(card.updatedAt).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric'
@@ -180,6 +260,99 @@ export function DeckPageClient({
         onOpenChange={setIsEditDeckModalOpen}
         onSuccess={showSuccessMessage}
       />
+
+      {/* Edit Card Modal */}
+      {editingCard && (
+        <EditCardForm
+          card={editingCard}
+          open={editingCard !== null}
+          onOpenChange={open => {
+            if (!open) setEditingCard(null);
+          }}
+          onSuccess={showSuccessMessage}
+        />
+      )}
+
+      {/* Delete Card Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Card</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this card? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deletingCard && (
+            <div className="py-4">
+              <div className="bg-muted p-4 rounded-md">
+                <div className="font-medium text-sm mb-2">
+                  {deletingCard.front}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {deletingCard.back}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeletingCard(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteCard}>
+              Delete Card
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Deck Confirmation Dialog */}
+      <Dialog
+        open={isDeleteDeckDialogOpen}
+        onOpenChange={setIsDeleteDeckDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Deck</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this deck? This action cannot be
+              undone and will also delete all {cards.length} card
+              {cards.length !== 1 ? 's' : ''} in this deck.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted p-4 rounded-md">
+              <div className="font-medium text-sm mb-2">{deck.title}</div>
+              {deck.description && (
+                <div className="text-sm text-muted-foreground">
+                  {deck.description}
+                </div>
+              )}
+              <div className="text-sm text-muted-foreground mt-2">
+                {cards.length} card{cards.length !== 1 ? 's' : ''} will be
+                deleted
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDeckDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteDeck}>
+              Delete Deck
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

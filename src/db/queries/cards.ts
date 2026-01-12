@@ -18,7 +18,7 @@ export async function getCardsByDeckId(deckId: number, userId: string) {
     .select()
     .from(cardsTable)
     .where(eq(cardsTable.deckId, deckId))
-    .orderBy(desc(cardsTable.createdAt));
+    .orderBy(desc(cardsTable.updatedAt));
 }
 
 export async function getCardById(cardId: number, userId: string) {
@@ -60,7 +60,10 @@ export async function updateCard(
 ) {
   return await db
     .update(cardsTable)
-    .set(data)
+    .set({
+      ...data,
+      updatedAt: new Date()
+    })
     .where(eq(cardsTable.id, cardId))
     .returning();
 }
@@ -69,5 +72,12 @@ export async function deleteCard(cardId: number) {
   return await db
     .delete(cardsTable)
     .where(eq(cardsTable.id, cardId))
+    .returning();
+}
+
+export async function deleteCardsByDeckId(deckId: number) {
+  return await db
+    .delete(cardsTable)
+    .where(eq(cardsTable.deckId, deckId))
     .returning();
 }

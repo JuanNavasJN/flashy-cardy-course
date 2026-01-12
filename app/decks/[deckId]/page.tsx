@@ -46,7 +46,8 @@ export default async function DeckPage({ params }: DeckPageProps) {
 
   const cardsWithStringDates = cards.map(card => ({
     ...card,
-    createdAt: card.createdAt.toISOString()
+    createdAt: card.createdAt.toISOString(),
+    updatedAt: card.updatedAt.toISOString()
   }));
 
   return (
