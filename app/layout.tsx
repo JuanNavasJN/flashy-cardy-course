@@ -41,6 +41,14 @@ export default function RootLayout({
               </h1>
             </Link>
             <div className="flex items-center gap-4">
+              <SignedIn>
+                <Link href="/pricing">
+                  <Button variant="outline" size="sm">
+                    Pricing
+                  </Button>
+                </Link>
+                <UserButton />
+              </SignedIn>
               <SignedOut>
                 <Button asChild variant="default">
                   <SignInButton mode="modal" />
@@ -49,9 +57,6 @@ export default function RootLayout({
                   <SignUpButton mode="modal" />
                 </Button>
               </SignedOut>
-              <SignedIn>
-                <UserButton />
-              </SignedIn>
             </div>
           </header>
           {children}

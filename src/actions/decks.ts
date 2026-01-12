@@ -11,14 +11,20 @@ import { revalidatePath } from 'next/cache';
 
 // Zod schema for creating a deck
 const createDeckSchema = z.object({
-  title: z.string().min(1, 'Title cannot be empty').max(255, 'Title is too long'),
+  title: z
+    .string()
+    .min(1, 'Title cannot be empty')
+    .max(255, 'Title is too long'),
   description: z.string().max(1000, 'Description is too long').optional()
 });
 
 // Zod schema for updating a deck
 const updateDeckSchema = z.object({
   deckId: z.number().int().positive(),
-  title: z.string().min(1, 'Title cannot be empty').max(255, 'Title is too long'),
+  title: z
+    .string()
+    .min(1, 'Title cannot be empty')
+    .max(255, 'Title is too long'),
   description: z.string().max(1000, 'Description is too long').optional()
 });
 
@@ -32,7 +38,7 @@ type UpdateDeckInput = z.infer<typeof updateDeckSchema>;
 type DeleteDeckInput = z.infer<typeof deleteDeckSchema>;
 
 export async function createDeckAction(input: CreateDeckInput) {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
 
   if (!userId) {
     throw new Error('Authentication required');
@@ -40,6 +46,23 @@ export async function createDeckAction(input: CreateDeckInput) {
 
   // Validate input with Zod
   const validatedData = createDeckSchema.parse(input);
+
+  // Check billing limits for free users
+  const hasUnlimitedDecks = has({ feature: 'unlimited_decks' });
+
+  if (!hasUnlimitedDecks) {
+    // Check current deck count for free users
+    const userDecks = await db
+      .select()
+      .from(decksTable)
+      .where(eq(decksTable.userId, userId));
+
+    if (userDecks.length >= 3) {
+      throw new Error(
+        'Free plan limited to 3 decks. Upgrade to Pro for unlimited decks.'
+      );
+    }
+  }
 
   try {
     // Create the deck
@@ -114,7 +137,12 @@ export async function deleteDeckAction(input: DeleteDeckInput) {
     const deckCheck = await db
       .select()
       .from(decksTable)
-      .where(and(eq(decksTable.id, validatedData.deckId), eq(decksTable.userId, userId)))
+      .where(
+        and(
+          eq(decksTable.id, validatedData.deckId),
+          eq(decksTable.userId, userId)
+        )
+      )
       .limit(1);
 
     if (deckCheck.length === 0) {

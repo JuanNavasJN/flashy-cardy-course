@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import {
   Card,
   CardContent,
@@ -17,12 +18,22 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Sparkles, Crown } from 'lucide-react';
 import { AddCardForm } from './add-card-form';
 import { EditDeckForm } from './edit-deck-form';
 import { EditCardForm } from './edit-card-form';
-import { deleteCardAction } from '@/src/actions/cards';
+import {
+  deleteCardAction,
+  generateFlashcardsWithAIAction
+} from '@/src/actions/cards';
 import { deleteDeckAction } from '@/src/actions/decks';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
+import { useRouter } from 'next/navigation';
 
 interface Deck {
   id: number;
@@ -58,6 +69,28 @@ export function DeckPageClient({
   const [deletingCard, setDeletingCard] = useState<Card | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleteDeckDialogOpen, setIsDeleteDeckDialogOpen] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [hasAIGeneration, setHasAIGeneration] = useState(false);
+  const [showDescriptionRequiredDialog, setShowDescriptionRequiredDialog] =
+    useState(false);
+
+  const { has } = useAuth();
+  const router = useRouter();
+
+  // Check AI generation feature access
+  useEffect(() => {
+    const checkAIFeature = async () => {
+      try {
+        const hasFeature = await has?.({ feature: 'ai_flashcard_generation' });
+        setHasAIGeneration(!!hasFeature);
+      } catch (error) {
+        console.error('Error checking AI feature access:', error);
+        setHasAIGeneration(false);
+      }
+    };
+
+    checkAIFeature();
+  }, [has]);
 
   const showSuccessMessage = (message: string) => {
     setSuccessMessage(message);
@@ -95,6 +128,37 @@ export function DeckPageClient({
   const openDeleteDialog = (card: Card) => {
     setDeletingCard(card);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleGenerateAI = async () => {
+    if (!hasAIGeneration) {
+      // Redirect to pricing page for free users
+      router.push('/pricing');
+      return;
+    }
+
+    // Check if deck has a description (required for AI generation)
+    if (!deck.description || deck.description.trim() === '') {
+      setShowDescriptionRequiredDialog(true);
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      const result = await generateFlashcardsWithAIAction({
+        deckId: deckIdNum,
+        count: 20
+      });
+
+      showSuccessMessage(
+        `Successfully generated ${result.count} cards with AI!`
+      );
+    } catch (error) {
+      console.error('Error generating AI cards:', error);
+      // You might want to show an error message here
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   return (
@@ -176,8 +240,32 @@ export function DeckPageClient({
           </div>
         </div>
 
-        {/* Add Card Button */}
-        <div className="flex justify-end">
+        {/* Add Card and AI Generation Buttons */}
+        <div className="flex justify-end gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateAI}
+                  disabled={isGeneratingAI}
+                  className="bg-linear-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 border-0"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  {isGeneratingAI ? 'Generating...' : 'Generate with AI'}
+                </Button>
+              </TooltipTrigger>
+              {!hasAIGeneration && (
+                <TooltipContent>
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-4 h-4" />
+                    <span>Pro feature - Upgrade to generate AI flashcards</span>
+                  </div>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
           <Button onClick={() => setIsAddCardModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Add Card
@@ -349,6 +437,53 @@ export function DeckPageClient({
             </Button>
             <Button variant="destructive" onClick={handleDeleteDeck}>
               Delete Deck
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Description Required for AI Generation Dialog */}
+      <Dialog
+        open={showDescriptionRequiredDialog}
+        onOpenChange={setShowDescriptionRequiredDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Description Required</DialogTitle>
+            <DialogDescription>
+              To generate flashcards with AI, your deck needs a description that
+              explains what the deck is about. This helps the AI create relevant
+              and accurate flashcards.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted p-4 rounded-md">
+              <div className="font-medium text-sm mb-2">
+                Current deck: {deck.title}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {deck.description ? (
+                  <>Description: {deck.description}</>
+                ) : (
+                  <>No description provided</>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDescriptionRequiredDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowDescriptionRequiredDialog(false);
+                setIsEditDeckModalOpen(true);
+              }}
+            >
+              Add Description
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,0 +1,358 @@
+---
+alwaysApply: true
+description: Rules for using Vercel AI library for AI-powered features, especially flashcard generation
+---
+
+# Vercel AI Integration Rules
+
+This flash card application uses the Vercel AI npm library to power AI features, specifically AI-powered flashcard generation. All AI functionality must follow these patterns for consistent implementation and proper error handling.
+
+## AI Flashcard Generation
+
+**All AI flashcard generation must use Vercel AI's structured output feature to ensure type-safe, validated responses.**
+
+### Required Pattern for Flashcard Generation
+
+```typescript
+import { generateText, Output } from 'ai';
+import { z } from 'zod';
+import { openai } from 'ai/openai';
+
+// Define the flashcard schema using Zod
+const flashcardSchema = z.object({
+  front: z.string().min(1).max(500),
+  back: z.string().min(1).max(500)
+});
+
+const flashcardsResponseSchema = z.object({
+  flashcards: z.array(flashcardSchema).min(1).max(50) // Limit to reasonable number
+});
+
+export async function generateFlashcardsWithAI(
+  topic: string,
+  count: number = 10,
+  additionalInstructions?: string
+) {
+  const prompt = `
+Generate ${count} flashcards about: ${topic}
+
+${
+  additionalInstructions
+    ? `Additional instructions: ${additionalInstructions}`
+    : ''
+}
+
+Requirements:
+- Each flashcard should have a clear question/term on the front
+- Each flashcard should have a comprehensive but concise answer on the back
+- Focus on key concepts, definitions, and important facts
+- Ensure flashcards are educational and accurate
+- Use clear, understandable language
+`;
+
+  try {
+    const { output } = await generateText({
+      model: openai('gpt-4o-mini'), // Use cost-effective model for generation
+      output: Output.object({
+        schema: flashcardsResponseSchema
+      }),
+      prompt,
+      temperature: 0.7, // Allow some creativity while maintaining accuracy
+      maxTokens: 4000 // Sufficient for generating multiple flashcards
+    });
+
+    return output.flashcards;
+  } catch (error) {
+    console.error('AI flashcard generation failed:', error);
+    throw new Error('Failed to generate flashcards. Please try again.');
+  }
+}
+```
+
+### Implementation Requirements
+
+#### Schema Definition
+
+- **MUST** define Zod schemas for all AI-generated data structures
+- **MUST** use `Output.object()` for structured responses
+- **MUST** include reasonable limits on array lengths and string lengths
+- **MUST** validate all AI responses before using them
+
+#### Error Handling
+
+- **MUST** wrap AI calls in try-catch blocks
+- **MUST** provide meaningful error messages to users
+- **MUST** log errors for debugging while not exposing sensitive information
+
+#### Model Selection
+
+- Use `gpt-4o-mini` for cost-effective generation tasks
+- Use `gpt-4o` for complex reasoning tasks
+- Reserve `gpt-4-turbo` for critical, high-accuracy requirements
+
+#### Prompt Engineering
+
+- **MUST** include clear, specific instructions
+- **MUST** specify the desired output format in the prompt
+- **MUST** include quality requirements (accuracy, clarity, educational value)
+- **MUST** handle optional parameters for customization
+
+### Usage in Server Actions
+
+```typescript
+// src/actions/cards.ts
+'use server';
+
+import { auth } from '@clerk/nextjs/server';
+import { generateFlashcardsWithAI } from '@/lib/ai/flashcard-generator';
+import { createCards } from '@/src/db/queries/cards';
+import { z } from 'zod';
+
+const generateFlashcardsSchema = z.object({
+  deckId: z.number().int().positive(),
+  topic: z.string().min(1).max(200),
+  count: z.number().int().min(1).max(50),
+  additionalInstructions: z.string().max(1000).optional()
+});
+
+type GenerateFlashcardsInput = z.infer<typeof generateFlashcardsSchema>;
+
+export async function generateFlashcardsAction(input: GenerateFlashcardsInput) {
+  const { userId, has } = await auth();
+
+  if (!userId) {
+    throw new Error('Authentication required');
+  }
+
+  // Check billing feature access
+  if (!has({ feature: 'ai_flashcard_generation' })) {
+    throw new Error('AI flashcard generation requires Pro plan');
+  }
+
+  // Validate input
+  const validatedInput = generateFlashcardsSchema.parse(input);
+
+  // Verify deck ownership
+  const deck = await getDeckById(validatedInput.deckId, userId);
+  if (!deck) {
+    throw new Error('Deck not found or access denied');
+  }
+
+  try {
+    // Generate flashcards using AI
+    const generatedCards = await generateFlashcardsWithAI(
+      validatedInput.topic,
+      validatedInput.count,
+      validatedInput.additionalInstructions
+    );
+
+    // Transform AI response to database format
+    const cardsToCreate = generatedCards.map(card => ({
+      deckId: validatedInput.deckId,
+      front: card.front,
+      back: card.back,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }));
+
+    // Create cards in database
+    const createdCards = await createCards(cardsToCreate);
+
+    return {
+      success: true,
+      cards: createdCards,
+      count: createdCards.length
+    };
+  } catch (error) {
+    console.error('Flashcard generation failed:', error);
+    throw new Error('Failed to generate flashcards. Please try again.');
+  }
+}
+```
+
+### Client-Side Integration
+
+```tsx
+// components/ai-flashcard-generator.tsx
+'use client';
+
+import { useState, useTransition } from 'react';
+import { generateFlashcardsAction } from '@/src/actions/cards';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+
+interface AIFlashcardGeneratorProps {
+  deckId: number;
+  onCardsGenerated: (cards: any[]) => void;
+}
+
+export function AIFlashcardGenerator({
+  deckId,
+  onCardsGenerated
+}: AIFlashcardGeneratorProps) {
+  const [topic, setTopic] = useState('');
+  const [count, setCount] = useState(10);
+  const [instructions, setInstructions] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  const handleGenerate = () => {
+    startTransition(async () => {
+      try {
+        const result = await generateFlashcardsAction({
+          deckId,
+          topic,
+          count,
+          additionalInstructions: instructions || undefined
+        });
+
+        onCardsGenerated(result.cards);
+        // Reset form or show success message
+      } catch (error) {
+        // Handle error - show toast or error message
+        console.error('Generation failed:', error);
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">Topic</label>
+        <Input
+          value={topic}
+          onChange={e => setTopic(e.target.value)}
+          placeholder="Enter the topic for flashcards..."
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Number of Cards</label>
+        <Input
+          type="number"
+          min={1}
+          max={50}
+          value={count}
+          onChange={e => setCount(parseInt(e.target.value) || 10)}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">
+          Additional Instructions (Optional)
+        </label>
+        <Textarea
+          value={instructions}
+          onChange={e => setInstructions(e.target.value)}
+          placeholder="Any specific requirements or focus areas..."
+          rows={3}
+        />
+      </div>
+
+      <Button
+        onClick={handleGenerate}
+        disabled={isPending || !topic.trim()}
+        className="w-full"
+      >
+        {isPending ? 'Generating...' : 'Generate Flashcards'}
+      </Button>
+    </div>
+  );
+}
+```
+
+## Security and Performance
+
+### Rate Limiting
+
+- **MUST** implement rate limiting for AI generation requests
+- **MUST** limit concurrent AI requests per user
+- **MUST** monitor API usage and costs
+
+### Content Validation
+
+- **MUST** validate AI-generated content for appropriateness
+- **MUST** filter out potentially harmful or inappropriate content
+- **MUST** ensure generated content meets educational standards
+
+### Cost Management
+
+- **MUST** use appropriate model sizes based on task complexity
+- **MUST** implement request caching where possible
+- **MUST** monitor and alert on unusual usage patterns
+
+## Testing AI Features
+
+### Unit Tests
+
+```typescript
+// Test AI response parsing
+describe('generateFlashcardsWithAI', () => {
+  it('should generate valid flashcards', async () => {
+    const result = await generateFlashcardsWithAI('JavaScript Arrays', 3);
+
+    expect(result).toHaveLength(3);
+    result.forEach(card => {
+      expect(card.front).toBeDefined();
+      expect(card.back).toBeDefined();
+      expect(typeof card.front).toBe('string');
+      expect(typeof card.back).toBe('string');
+    });
+  });
+});
+```
+
+### Integration Tests
+
+- Test end-to-end flashcard generation workflow
+- Verify database persistence of generated cards
+- Test error handling and user feedback
+
+## Common Patterns to Avoid
+
+### ❌ Don't Use Raw AI Responses
+
+```typescript
+// Wrong - No schema validation
+const response = await generateText({ model, prompt });
+const flashcards = JSON.parse(response.text); // Unsafe!
+```
+
+### ❌ Don't Skip Error Handling
+
+```typescript
+// Wrong - No error handling
+const { output } = await generateText({ model, prompt });
+return output.flashcards; // Could crash if AI returns invalid format
+```
+
+### ❌ Don't Hardcode Prompts
+
+```typescript
+// Wrong - Hardcoded prompts
+const prompt = 'Generate flashcards about JavaScript';
+```
+
+### ✅ Always Use Structured Output
+
+```typescript
+// Correct - Schema validation
+const { output } = await generateText({
+  model,
+  output: Output.object({ schema: flashcardsSchema }),
+  prompt: buildDynamicPrompt(topic, count, instructions)
+});
+```
+
+## Checklist for AI Implementation
+
+- [ ] Zod schemas defined for all AI response structures
+- [ ] `Output.object()` used for structured responses
+- [ ] Proper error handling with try-catch blocks
+- [ ] User-friendly error messages
+- [ ] Billing feature checks implemented
+- [ ] Rate limiting and cost monitoring
+- [ ] Input validation before AI calls
+- [ ] Content validation for appropriateness
+- [ ] Comprehensive testing including error scenarios
+- [ ] Performance monitoring and optimization

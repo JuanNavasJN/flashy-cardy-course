@@ -8,17 +8,21 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { getUserDecks } from '@/src/db/queries/decks';
 import { CreateDeckDialog } from './create-deck-dialog';
+import { CrownIcon } from 'lucide-react';
 
 export default async function Dashboard() {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
 
   if (!userId) {
     redirect('/');
   }
 
   const decks = await getUserDecks(userId);
+  const hasUnlimitedDecks = has({ feature: 'unlimited_decks' });
+  const atDeckLimit = !hasUnlimitedDecks && decks.length >= 3;
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -34,7 +38,23 @@ export default async function Dashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-semibold">Your Decks</h2>
-            <CreateDeckDialog />
+            <div className="flex items-center gap-4">
+              {!hasUnlimitedDecks && (
+                <div className="text-sm text-muted-foreground">
+                  {decks.length}/3 decks used
+                </div>
+              )}
+              {atDeckLimit ? (
+                <Link href="/pricing">
+                  <Button>
+                    <CrownIcon className="h-4 w-4 mr-2" />
+                    Upgrade to Pro
+                  </Button>
+                </Link>
+              ) : (
+                <CreateDeckDialog />
+              )}
+            </div>
           </div>
 
           {decks.length === 0 ? (
